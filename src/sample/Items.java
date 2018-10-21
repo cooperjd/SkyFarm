@@ -116,9 +116,6 @@ public abstract class Items implements Serializable{
 
     public void removeChild(String name){
         children.remove(name);
-        if(children.size() == 0){
-            children.put("null", null);
-        }
     }
 }
 

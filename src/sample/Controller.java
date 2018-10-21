@@ -10,6 +10,8 @@ import javafx.fxml.Initializable;
 import javafx.scene.control.*;
 import javafx.scene.control.Button;
 import javafx.scene.control.TextField;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.GridPane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
@@ -151,7 +153,9 @@ public class Controller implements Initializable {
         String[] atts = line.split(SEPARATOR_REGEX);
         Color color = Color.color(Double.parseDouble(atts[INDEX_MAP.get("red")]),Double.parseDouble(atts[INDEX_MAP.get("green")]),Double.parseDouble(atts[INDEX_MAP.get("blue")]));
         String[] children = atts[INDEX_MAP.get("children")].split(COMMA);
-        childMap.put(atts[INDEX_MAP.get("name")], children);
+        if(!children[0].equalsIgnoreCase("null")) {
+            childMap.put(atts[INDEX_MAP.get("name")], children);
+        }
         if(atts[INDEX_MAP.get("isContainer")].equalsIgnoreCase(ITEM_CONTAINER_CODE)){
             item = new ItemContainer(atts[INDEX_MAP.get("name")],Double.parseDouble(atts[INDEX_MAP.get("price")]),Integer.parseInt(atts[INDEX_MAP.get("xcoord")]),
                     Integer.parseInt(atts[INDEX_MAP.get("ycoord")]), Integer.parseInt(atts[INDEX_MAP.get("lengthSpan")]),Integer.parseInt(atts[INDEX_MAP.get("widthSpan")]),color);
@@ -168,7 +172,7 @@ public class Controller implements Initializable {
     public TreeItem<String> buildTree(TreeItem<String> treeItem, Items item){
         //Creating new TreeItem instance for this iteration of the tree traversal
         Main.itemMap.put(item.getName(), item);
-        TreeItem<String> newTreeItem = new TreeItem<String>(treeItem.getValue());
+        TreeItem<String> newTreeItem = createNewTreeItem(item);
         //Getting the children of this item
         HashMap<String, Items> children = item.getChildren();
         //Checking if the item has children
@@ -224,6 +228,17 @@ public class Controller implements Initializable {
         }
     }
 
+    private TreeItem<String> createNewTreeItem(Items item){
+        String image = "resources/";
+        if(item.isItemContainer()) {
+            image = image + "folder.png";
+        }else{
+            image = image + "item.png";
+        }
+
+        return new TreeItem<String>(item.getName(), new ImageView(new Image(getClass().getResourceAsStream(image))));
+    }
+
     //Writes Main.itemMap to the file
     public void saveMap(){
         try {
@@ -271,7 +286,11 @@ public class Controller implements Initializable {
                         }
                         childBuilder.append(childEntry.getKey());
                     }
-                    atts[INDEX_MAP.get("children")] = childBuilder.toString();
+                    if(childBuilder.toString().isEmpty() || childBuilder.toString().startsWith("null")) {
+                        atts[INDEX_MAP.get("children")] = "null";
+                    }else{
+                        atts[INDEX_MAP.get("children")] = childBuilder.toString();
+                    }
                 }
                 for(String att : atts){
                     record.append(att + SEPARATOR);
@@ -363,7 +382,7 @@ public class Controller implements Initializable {
             item.getChildren().put(newItem.getName(), newItem);
             System.out.println("item's new children= " + Main.itemMap.get(item.getName()).getChildren());
             Main.itemMap.put(newItem.getName(), newItem);
-            selectedItem.getChildren().add(new TreeItem<>(newItem.getName()));
+            selectedItem.getChildren().add(createNewTreeItem(newItem));
             selectedItem.setExpanded(true);
             saveMap();
             drawFarm();
@@ -372,10 +391,23 @@ public class Controller implements Initializable {
 
     @FXML
     void confirmEdit(ActionEvent event) {
-        /*try{
-
-
-        } catch(IOException e){e.printStackTrace();}}*/}
+        TreeItem<String> selectedItem = tree.getSelectionModel().getSelectedItem();
+        if(containerCheck.isSelected()){
+            selectedItem.setGraphic(new ImageView(new Image(getClass().getResourceAsStream("resources/folder.png"))));
+            Main.itemMap.put(selectedItem.getValue(), new ItemContainer(nameBox.getText(), Double.parseDouble(priceBox.getText()), Integer.parseInt(xCoord.getText()),
+                    Integer.parseInt(yCoord.getText()), Integer.parseInt(lenBox.getText()), Integer.parseInt(widthBox.getText()), colorPicker.getValue()));
+        }else{
+            if(selectedItem.getChildren() == null || selectedItem.getChildren().isEmpty()) {
+                selectedItem.setGraphic(new ImageView(new Image(getClass().getResourceAsStream("resources/item.png"))));
+                Main.itemMap.put(selectedItem.getValue(), new Item(nameBox.getText(), Double.parseDouble(priceBox.getText()), Integer.parseInt(xCoord.getText()),
+                        Integer.parseInt(yCoord.getText()), Integer.parseInt(lenBox.getText()), Integer.parseInt(widthBox.getText()), colorPicker.getValue()));
+            }else{
+                JOptionPane.showMessageDialog(null, "Must remove children before you can change this container into an item.");
+            }
+        }
+        saveMap();
+        drawFarm();
+    }
 
     @FXML
     void removeItem(ActionEvent event) {
@@ -389,6 +421,7 @@ public class Controller implements Initializable {
             Items item = Main.itemMap.get(selectedItem.getValue());
             if(item.isItemContainer()) {
                 for (Map.Entry<String, Items> entry : item.getChildren().entrySet()) {
+                    item.removeChild(entry.getKey());
                     Main.itemMap.remove(entry.getKey());
                 }
             }
