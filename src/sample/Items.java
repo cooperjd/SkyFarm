@@ -1,6 +1,9 @@
 package sample;
 
+import javafx.scene.paint.Color;
+
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.HashMap;
 
 public abstract class Items implements Serializable{
@@ -102,7 +105,11 @@ public abstract class Items implements Serializable{
         return blue;
     }
 
-    public String getColor(){
+    public Color getColor(){
+        return Color.color(red,green,blue);
+    }
+
+    public String getColorAsString(){
         return "[red=" + red + ", green=" + green + ", blue=" + blue + "]";
     }
 

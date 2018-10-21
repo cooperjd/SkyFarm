@@ -1,7 +1,5 @@
 package sample;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.event.ActionEvent;
@@ -21,6 +19,9 @@ import javax.swing.*;
 import java.io.*;
 import java.net.URL;
 import java.util.*;
+
+import static java.util.Map.Entry.comparingByKey;
+import static java.util.stream.Collectors.toMap;
 
 
 public class Controller implements Initializable {
@@ -66,11 +67,14 @@ public class Controller implements Initializable {
 
     private static final String DEFAULT_NAME = "SkyFarm";
     private static final String FILENAME = "skyfarm.list";
+    private static final String RESOURCES = "resources/";
+    private static final String FOLDER_IMAGE = "folder.png";
+    private static final String ITEM_IMAGE = "item.png";
     private static final String ITEM_CONTAINER_CODE = "ic";
-    private static final String ITEM_CODE = "i";
     private static final String SEPARATOR = "|";
     private static final String SEPARATOR_REGEX = "\\|";
     private static final String COMMA = ",";
+    private static final String EMPTY_STRING = "";
     private boolean fileExists = false;
     private static final Map<String, Integer> INDEX_MAP;
     static
@@ -107,40 +111,30 @@ public class Controller implements Initializable {
                 //Use the stream to retrieve the map object from the file and set the main item map equal to it
                 FileReader file = new FileReader(inFile);
                 BufferedReader reader = new BufferedReader(file);
-                Map<String, String[]> childMap = new HashMap<String, String[]>();
+                Map<String, String[]> hasChildMap = new HashMap<String, String[]>();
 
                 String line;
-                //String output = "";
 
                 while((line = reader.readLine()) != null){
-                    //output += line;
-                    Items lineItem = parseLine(line, childMap);
+                    Items lineItem = parseLine(line, hasChildMap);
                     Main.itemMap.put(lineItem.getName(), lineItem);
+
+                    if(lineItem.getName().equalsIgnoreCase(DEFAULT_NAME)){
+                        rootItem = lineItem;
+                        fileExists = true;
+                    }
                 }
 
-                for(Map.Entry<String, String[]> entry : childMap.entrySet()){
+                for(Map.Entry<String, String[]> entry : hasChildMap.entrySet()){
                     Main.itemMap.get(entry.getKey()).setChildren(entry.getValue());
                 }
                 file.close();
                 reader.close();
-
-                /**This loop is used to get the root item from the map.
-                 You could set root item to Main.itemMap.get(DEFAULT_NAME) but I didn't here
-                 just in case we want to be able to change the root item later. This just grabs
-                 the first item in the itemMap, assigns it to rootItem, and breaks from the loop
-                 so we don't waste time going through all of the entries.
-                 */
-                for (Map.Entry<String, Items> entry : Main.itemMap.entrySet()) {
-                    rootItem = entry.getValue();
-                    fileExists = true;
-                    break;
-                }
             }else{
                 //If the file doesn't exist then we create it here
                 inFile.createNewFile();
             }
         } catch(Exception e){
-            System.out.println("Error in readFile()");
             e.printStackTrace();
         }
 
@@ -194,7 +188,7 @@ public class Controller implements Initializable {
     }
 
     //This method draws the boxes on in the gridPane
-    public void drawFarm(){
+    public void drawFarm(String itemName){
         //Loop through all of the items in Main.itemMap
         for(Map.Entry<String, Items> entry : Main.itemMap.entrySet()){
             //Use the items attributes to draw the item on the screen
@@ -203,7 +197,11 @@ public class Controller implements Initializable {
             rec.setWidth(item.getWidthSpan());
             rec.setHeight(item.getLengthSpan());
             javafx.scene.paint.Color c = javafx.scene.paint.Color.color(item.getRed(), item.getGreen(), item.getBlue());
-            rec.setFill(Color.WHITE);
+            if(item.getName().equals(itemName)) {
+                rec.setFill(item.getColor());
+            }else{
+                rec.setFill(Color.WHITE);
+            }
             rec.setStroke(c);
             farmGrid.setRowIndex(rec, item.getyCoord());
             farmGrid.setColumnIndex(rec, item.getxCoord());
@@ -229,11 +227,11 @@ public class Controller implements Initializable {
     }
 
     private TreeItem<String> createNewTreeItem(Items item){
-        String image = "resources/";
+        String image = RESOURCES;
         if(item.isItemContainer()) {
-            image = image + "folder.png";
+            image = image + FOLDER_IMAGE;
         }else{
-            image = image + "item.png";
+            image = image + ITEM_IMAGE;
         }
 
         return new TreeItem<String>(item.getName(), new ImageView(new Image(getClass().getResourceAsStream(image))));
@@ -246,62 +244,65 @@ public class Controller implements Initializable {
             PrintWriter writer = new PrintWriter(outFile);
 
             if(!outFile.exists()){
-                if(outFile.createNewFile()){
-                    System.out.println("Successful create");
-                }else{
-                    System.out.println("Failed to create");
-                }
+                outFile.createNewFile();
             }else{
-                writer.write("");
+                writer.write(EMPTY_STRING);
                 writer.flush();
             }
 
-            for(Map.Entry<String, Items> entry : Main.itemMap.entrySet()){
-                Items item = entry.getValue();
-                String[] atts = new String[INDEX_MAP.size()];
-                StringBuffer record = new StringBuffer();
+            writer.append(getRecord(Main.itemMap.get(DEFAULT_NAME)) + "\n");
 
-                if(item.isItemContainer()) {
-                    atts[INDEX_MAP.get("isContainer")] = "ic";
-                }else{
-                    atts[INDEX_MAP.get("isContainer")] = "i";
+            for(Map.Entry<String, Items> entry : Main.itemMap.entrySet()){
+                if(!entry.getKey().equalsIgnoreCase(DEFAULT_NAME)) {
+                    writer.append(getRecord(entry.getValue()) + "\n");
                 }
-                atts[INDEX_MAP.get("name")] = item.getName();
-                atts[INDEX_MAP.get("price")] = String.valueOf(item.getPrice());
-                atts[INDEX_MAP.get("xcoord")] = String.valueOf(item.getxCoord());
-                atts[INDEX_MAP.get("ycoord")] = String.valueOf(item.getyCoord());
-                atts[INDEX_MAP.get("lengthSpan")] = String.valueOf(item.getLengthSpan());
-                atts[INDEX_MAP.get("widthSpan")] = String.valueOf(item.getWidthSpan());
-                atts[INDEX_MAP.get("red")] = String.valueOf(item.getRed());
-                atts[INDEX_MAP.get("green")] = String.valueOf(item.getGreen());
-                atts[INDEX_MAP.get("blue")] = String.valueOf(item.getBlue());
-                StringBuilder childBuilder = new StringBuilder();
-                if(item.isItemContainer()) {
-                    boolean first = true;
-                    for (Map.Entry<String, Items> childEntry : item.getChildren().entrySet()) {
-                        if(!first){
-                            childBuilder.append(",");
-                        }else{
-                            first = false;
-                        }
-                        childBuilder.append(childEntry.getKey());
-                    }
-                    if(childBuilder.toString().isEmpty() || childBuilder.toString().startsWith("null")) {
-                        atts[INDEX_MAP.get("children")] = "null";
-                    }else{
-                        atts[INDEX_MAP.get("children")] = childBuilder.toString();
-                    }
-                }
-                for(String att : atts){
-                    record.append(att + SEPARATOR);
-                }
-                atts[INDEX_MAP.get("children")] = childBuilder.toString();
-                writer.append(record.toString() + "\n");
             }
             writer.flush();
             writer.close();
         }
         catch (IOException e){e.printStackTrace();}
+    }
+
+    private String getRecord(Items item){
+        String[] atts = new String[INDEX_MAP.size()];
+        StringBuffer record = new StringBuffer();
+
+        if(item.isItemContainer()) {
+            atts[INDEX_MAP.get("isContainer")] = "ic";
+        }else{
+            atts[INDEX_MAP.get("isContainer")] = "i";
+        }
+        atts[INDEX_MAP.get("name")] = item.getName();
+        atts[INDEX_MAP.get("price")] = String.valueOf(item.getPrice());
+        atts[INDEX_MAP.get("xcoord")] = String.valueOf(item.getxCoord());
+        atts[INDEX_MAP.get("ycoord")] = String.valueOf(item.getyCoord());
+        atts[INDEX_MAP.get("lengthSpan")] = String.valueOf(item.getLengthSpan());
+        atts[INDEX_MAP.get("widthSpan")] = String.valueOf(item.getWidthSpan());
+        atts[INDEX_MAP.get("red")] = String.valueOf(item.getRed());
+        atts[INDEX_MAP.get("green")] = String.valueOf(item.getGreen());
+        atts[INDEX_MAP.get("blue")] = String.valueOf(item.getBlue());
+        StringBuilder childBuilder = new StringBuilder();
+        if(item.isItemContainer()) {
+            boolean first = true;
+            for (Map.Entry<String, Items> childEntry : item.getChildren().entrySet()) {
+                if(!first){
+                    childBuilder.append(",");
+                }else{
+                    first = false;
+                }
+                childBuilder.append(childEntry.getKey());
+            }
+            if(childBuilder.toString().isEmpty() || childBuilder.toString().startsWith("null")) {
+                atts[INDEX_MAP.get("children")] = "null";
+            }else{
+                atts[INDEX_MAP.get("children")] = childBuilder.toString();
+            }
+        }
+        for(String att : atts){
+            record.append(att + SEPARATOR);
+        }
+
+        return record.toString();
     }
 
     //Sets tree and can load array of saved tree items
@@ -317,7 +318,7 @@ public class Controller implements Initializable {
         //If the file exists, build the tree based on the file
         if(fileExists) {
             root.getChildren().add(buildTree(root, rootItem));
-            drawFarm();
+            drawFarm(EMPTY_STRING);
             //If the file doesn't exist, create a new tree
         }else{
             root.getChildren().add(new TreeItem<>(new Item(rootItem.getName(), 0.0, 1, 1, 1, 1, javafx.scene.paint.Color.BLACK).getName()));
@@ -332,8 +333,10 @@ public class Controller implements Initializable {
                 if(!selectedItem.getValue().equalsIgnoreCase(DEFAULT_NAME)) {
                     displayItem(Main.itemMap.get(selectedItem.getValue()));
                 }
+                drawFarm(selectedItem.getValue());
             }
         });
+
     }
 
     public Map.Entry<String,Items> getEntrySet(String findingKey) {
@@ -380,12 +383,11 @@ public class Controller implements Initializable {
                     new ItemContainer(nameBox.getText(), Double.parseDouble(priceBox.getText()), (Integer.parseInt(xCoord.getText())), (Integer.parseInt(yCoord.getText())), Integer.parseInt(lenBox.getText()), Integer.parseInt(widthBox.getText()), cp);
 
             item.getChildren().put(newItem.getName(), newItem);
-            System.out.println("item's new children= " + Main.itemMap.get(item.getName()).getChildren());
             Main.itemMap.put(newItem.getName(), newItem);
             selectedItem.getChildren().add(createNewTreeItem(newItem));
             selectedItem.setExpanded(true);
             saveMap();
-            drawFarm();
+            drawFarm(newItem.getName());
         }
     }
 
@@ -393,12 +395,12 @@ public class Controller implements Initializable {
     void confirmEdit(ActionEvent event) {
         TreeItem<String> selectedItem = tree.getSelectionModel().getSelectedItem();
         if(containerCheck.isSelected()){
-            selectedItem.setGraphic(new ImageView(new Image(getClass().getResourceAsStream("resources/folder.png"))));
+            selectedItem.setGraphic(new ImageView(new Image(getClass().getResourceAsStream(RESOURCES + FOLDER_IMAGE))));
             Main.itemMap.put(selectedItem.getValue(), new ItemContainer(nameBox.getText(), Double.parseDouble(priceBox.getText()), Integer.parseInt(xCoord.getText()),
                     Integer.parseInt(yCoord.getText()), Integer.parseInt(lenBox.getText()), Integer.parseInt(widthBox.getText()), colorPicker.getValue()));
         }else{
             if(selectedItem.getChildren() == null || selectedItem.getChildren().isEmpty()) {
-                selectedItem.setGraphic(new ImageView(new Image(getClass().getResourceAsStream("resources/item.png"))));
+                selectedItem.setGraphic(new ImageView(new Image(getClass().getResourceAsStream(RESOURCES + ITEM_IMAGE))));
                 Main.itemMap.put(selectedItem.getValue(), new Item(nameBox.getText(), Double.parseDouble(priceBox.getText()), Integer.parseInt(xCoord.getText()),
                         Integer.parseInt(yCoord.getText()), Integer.parseInt(lenBox.getText()), Integer.parseInt(widthBox.getText()), colorPicker.getValue()));
             }else{
@@ -406,7 +408,7 @@ public class Controller implements Initializable {
             }
         }
         saveMap();
-        drawFarm();
+        drawFarm(selectedItem.getValue());
     }
 
     @FXML
@@ -430,7 +432,7 @@ public class Controller implements Initializable {
             selectedItem.getParent().getChildren().remove(selectedItem);
             selectedItem.setExpanded(true);
             saveMap();
-            drawFarm();
+            drawFarm(EMPTY_STRING);
         }
     }
 
