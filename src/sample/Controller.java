@@ -1,6 +1,7 @@
 package sample;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.event.ActionEvent;
@@ -62,13 +63,35 @@ public class Controller implements Initializable {
     private GridPane farmGrid;
 
     private static final String DEFAULT_NAME = "SkyFarm";
+    private static final String FILENAME = "skyfarm.list";
+    private static final String ITEM_CONTAINER_CODE = "ic";
+    private static final String ITEM_CODE = "i";
+    private static final String SEPARATOR = "|";
+    private static final String SEPARATOR_REGEX = "\\|";
+    private static final String COMMA = ",";
     private boolean fileExists = false;
+    private static final Map<String, Integer> INDEX_MAP;
+    static
+    {
+        INDEX_MAP = new HashMap<String, Integer>();
+        INDEX_MAP.put("isContainer", 0);
+        INDEX_MAP.put("name", 1);
+        INDEX_MAP.put("price", 2);
+        INDEX_MAP.put("xcoord", 3);
+        INDEX_MAP.put("ycoord", 4);
+        INDEX_MAP.put("lengthSpan", 5);
+        INDEX_MAP.put("widthSpan", 6);
+        INDEX_MAP.put("red", 7);
+        INDEX_MAP.put("green", 8);
+        INDEX_MAP.put("blue", 9);
+        INDEX_MAP.put("children", 10);
+    }
 
     public void initialize(URL url, ResourceBundle rb){
         loadTreeItems(DEFAULT_NAME);
     }
 
-    //Reads skyfarm.obj file if it exists and returns the root object from the file.
+    //Reads skyfarm.json file if it exists and returns the root object from the file.
     //If it doesn't exist the it will return a new root item with the name DEFAULT_NAME
     public Items readFile(){
         //Setting default root item
@@ -76,31 +99,40 @@ public class Controller implements Initializable {
 
         try{
             //Setting the file
-            File inFile = new File("skyfarm.obj");
+            File inFile = new File(FILENAME);
             //Checking if the file exists and also making sure it is not empty
             if(inFile.exists() && inFile.length() > 0){
-                //Object stream will get the saved item map from the file
-                ObjectInputStream ois = new ObjectInputStream(new FileInputStream(inFile));
                 //Use the stream to retrieve the map object from the file and set the main item map equal to it
-                Main.itemMap = (HashMap<String, Items>) ois.readObject();
-                //Making sure the map is not null.
-                if(Main.itemMap != null) {
-                    //Setting the fileExists flag to true because the file exists and contains a valid map
-                    fileExists = true;
+                FileReader file = new FileReader(inFile);
+                BufferedReader reader = new BufferedReader(file);
+                Map<String, String[]> childMap = new HashMap<String, String[]>();
 
-                    /**This loop is used to get the root item from the map.
-                       You could set root item to Main.itemMap.get(DEFAULT_NAME) but I didn't here
-                       just in case we want to be able to change the root item later. This just grabs
-                       the first item in the itemMap, assigns it to rootItem, and breaks from the loop
-                       so we don't waste time going through all of the entries.
-                     */
-                    for (Map.Entry<String, Items> entry : Main.itemMap.entrySet()) {
-                        rootItem = entry.getValue();
-                        break;
-                    }
+                String line;
+                //String output = "";
+
+                while((line = reader.readLine()) != null){
+                    //output += line;
+                    Items lineItem = parseLine(line, childMap);
+                    Main.itemMap.put(lineItem.getName(), lineItem);
                 }
-                //Closing the stream
-                ois.close();
+
+                for(Map.Entry<String, String[]> entry : childMap.entrySet()){
+                    Main.itemMap.get(entry.getKey()).setChildren(entry.getValue());
+                }
+                file.close();
+                reader.close();
+
+                /**This loop is used to get the root item from the map.
+                 You could set root item to Main.itemMap.get(DEFAULT_NAME) but I didn't here
+                 just in case we want to be able to change the root item later. This just grabs
+                 the first item in the itemMap, assigns it to rootItem, and breaks from the loop
+                 so we don't waste time going through all of the entries.
+                 */
+                for (Map.Entry<String, Items> entry : Main.itemMap.entrySet()) {
+                    rootItem = entry.getValue();
+                    fileExists = true;
+                    break;
+                }
             }else{
                 //If the file doesn't exist then we create it here
                 inFile.createNewFile();
@@ -113,27 +145,44 @@ public class Controller implements Initializable {
         return rootItem;
     }
 
+    private Items parseLine(String line, Map<String, String[]> childMap){
+        Items item = null;
+
+        String[] atts = line.split(SEPARATOR_REGEX);
+        Color color = Color.color(Double.parseDouble(atts[INDEX_MAP.get("red")]),Double.parseDouble(atts[INDEX_MAP.get("green")]),Double.parseDouble(atts[INDEX_MAP.get("blue")]));
+        String[] children = atts[INDEX_MAP.get("children")].split(COMMA);
+        childMap.put(atts[INDEX_MAP.get("name")], children);
+        if(atts[INDEX_MAP.get("isContainer")].equalsIgnoreCase(ITEM_CONTAINER_CODE)){
+            item = new ItemContainer(atts[INDEX_MAP.get("name")],Double.parseDouble(atts[INDEX_MAP.get("price")]),Integer.parseInt(atts[INDEX_MAP.get("xcoord")]),
+                    Integer.parseInt(atts[INDEX_MAP.get("ycoord")]), Integer.parseInt(atts[INDEX_MAP.get("lengthSpan")]),Integer.parseInt(atts[INDEX_MAP.get("widthSpan")]),color);
+        }else{
+            item = new Item(atts[INDEX_MAP.get("name")],Double.parseDouble(atts[INDEX_MAP.get("price")]),Integer.parseInt(atts[INDEX_MAP.get("xcoord")]),
+                    Integer.parseInt(atts[INDEX_MAP.get("ycoord")]), Integer.parseInt(atts[INDEX_MAP.get("lengthSpan")]),Integer.parseInt(atts[INDEX_MAP.get("widthSpan")]),color);
+        }
+        return item;
+    }
     /**Recursive method to build the TreeItem
-       Param: treeItem - the TreeItem that represents the item
-       Param: item - the next node in the tree that needs to be traversed
+     Param: treeItem - the TreeItem that represents the item
+     Param: item - the next node in the tree that needs to be traversed
      */
     public TreeItem<String> buildTree(TreeItem<String> treeItem, Items item){
         //Creating new TreeItem instance for this iteration of the tree traversal
+        Main.itemMap.put(item.getName(), item);
         TreeItem<String> newTreeItem = new TreeItem<String>(treeItem.getValue());
         //Getting the children of this item
         HashMap<String, Items> children = item.getChildren();
         //Checking if the item has children
         if(children != null && children.size() > 0) {
             //Looping through all of the items children
-            for (Map.Entry<String, Items> entry : item.getChildren().entrySet()) {
+            for (Map.Entry<String, Items> entry : children.entrySet()) {
                 //Creating a new TreeItem for the child
-                TreeItem<String> childTreeItem = new TreeItem<String>(entry.getValue().getName());
+                TreeItem<String> childTreeItem = new TreeItem<String>(entry.getKey());
                 /**
                  * This is where all of the magic happens
                  * We set this childTreeItem and all of its children
                  * as a child for the newTreeItem through recursion
                  */
-                newTreeItem.getChildren().add(buildTree(childTreeItem, Main.itemMap.get(childTreeItem.getValue())));
+                newTreeItem.getChildren().add(buildTree(childTreeItem, entry.getValue()));
             }
         }
         //Return the newTreeItem after having all of its children set
@@ -178,30 +227,60 @@ public class Controller implements Initializable {
     //Writes Main.itemMap to the file
     public void saveMap(){
         try {
-            File outFile = new File("skyfarm.obj");
-            if(outFile.exists()){
-                if(outFile.delete()){
-                    System.out.println("Successful Delete");
+            File outFile = new File(FILENAME);
+            PrintWriter writer = new PrintWriter(outFile);
+
+            if(!outFile.exists()){
+                if(outFile.createNewFile()){
+                    System.out.println("Successful create");
                 }else{
-                    System.out.println("Failed to Delete");
+                    System.out.println("Failed to create");
                 }
-            }
-            for(Map.Entry<String, Items> entry : Main.itemMap.entrySet()){
-                System.out.println(entry.getKey() + " - " + entry.getValue() + "\n");
-            }
-
-            System.out.println("----------------------------------------------------------------------------------");
-            if(outFile.createNewFile()){
-                System.out.println("Successful create");
             }else{
-                System.out.println("Failed to create");
+                writer.write("");
+                writer.flush();
             }
 
-            ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(outFile));
+            for(Map.Entry<String, Items> entry : Main.itemMap.entrySet()){
+                Items item = entry.getValue();
+                String[] atts = new String[INDEX_MAP.size()];
+                StringBuffer record = new StringBuffer();
 
-            oos.writeObject(Main.itemMap);
-            oos.flush();
-            oos.close();
+                if(item.isItemContainer()) {
+                    atts[INDEX_MAP.get("isContainer")] = "ic";
+                }else{
+                    atts[INDEX_MAP.get("isContainer")] = "i";
+                }
+                atts[INDEX_MAP.get("name")] = item.getName();
+                atts[INDEX_MAP.get("price")] = String.valueOf(item.getPrice());
+                atts[INDEX_MAP.get("xcoord")] = String.valueOf(item.getxCoord());
+                atts[INDEX_MAP.get("ycoord")] = String.valueOf(item.getyCoord());
+                atts[INDEX_MAP.get("lengthSpan")] = String.valueOf(item.getLengthSpan());
+                atts[INDEX_MAP.get("widthSpan")] = String.valueOf(item.getWidthSpan());
+                atts[INDEX_MAP.get("red")] = String.valueOf(item.getRed());
+                atts[INDEX_MAP.get("green")] = String.valueOf(item.getGreen());
+                atts[INDEX_MAP.get("blue")] = String.valueOf(item.getBlue());
+                StringBuilder childBuilder = new StringBuilder();
+                if(item.isItemContainer()) {
+                    boolean first = true;
+                    for (Map.Entry<String, Items> childEntry : item.getChildren().entrySet()) {
+                        if(!first){
+                            childBuilder.append(",");
+                        }else{
+                            first = false;
+                        }
+                        childBuilder.append(childEntry.getKey());
+                    }
+                    atts[INDEX_MAP.get("children")] = childBuilder.toString();
+                }
+                for(String att : atts){
+                    record.append(att + SEPARATOR);
+                }
+                atts[INDEX_MAP.get("children")] = childBuilder.toString();
+                writer.append(record.toString() + "\n");
+            }
+            writer.flush();
+            writer.close();
         }
         catch (IOException e){e.printStackTrace();}
     }
@@ -212,15 +291,15 @@ public class Controller implements Initializable {
         Items rootItem = readFile();
         //Set the root TreeItem using the rootItem
         TreeItem<String> root = new TreeItem<>(rootItem.getName());
+        //Set Root in Main.itemap
+        Main.itemMap.put(rootItem.getName(), rootItem);
         root.setExpanded(true);
         tree.setShowRoot(false);
-        //Put the root item into the itemMap
-        Main.itemMap.put(rootItem.getName(), rootItem);
         //If the file exists, build the tree based on the file
         if(fileExists) {
             root.getChildren().add(buildTree(root, rootItem));
             drawFarm();
-        //If the file doesn't exist, create a new tree
+            //If the file doesn't exist, create a new tree
         }else{
             root.getChildren().add(new TreeItem<>(new Item(rootItem.getName(), 0.0, 1, 1, 1, 1, javafx.scene.paint.Color.BLACK).getName()));
         }
@@ -282,33 +361,21 @@ public class Controller implements Initializable {
                     new ItemContainer(nameBox.getText(), Double.parseDouble(priceBox.getText()), (Integer.parseInt(xCoord.getText())), (Integer.parseInt(yCoord.getText())), Integer.parseInt(lenBox.getText()), Integer.parseInt(widthBox.getText()), cp);
 
             item.getChildren().put(newItem.getName(), newItem);
+            System.out.println("item's new children= " + Main.itemMap.get(item.getName()).getChildren());
             Main.itemMap.put(newItem.getName(), newItem);
             selectedItem.getChildren().add(new TreeItem<>(newItem.getName()));
             selectedItem.setExpanded(true);
             saveMap();
+            drawFarm();
         }
     }
 
     @FXML
     void confirmEdit(ActionEvent event) {
-        try{
-            FileReader file = new FileReader(new File("skyfarm.json"));
-            BufferedReader reader = new BufferedReader(file);
+        /*try{
 
-            String line;
-            String output = "";
 
-            while((line = reader.readLine()) != null){
-                output += line;
-            }
-            Main.itemMap = new Gson().fromJson(output,Main.itemMap.getClass());
-            Map.Entry<String, Items> mapped;
-            if((mapped = getEntrySet(nameBox.getText()))!=null){
-                ////FINISH THIS TOMORROW
-            }
-            System.out.println(Main.itemMap);
-
-        } catch(IOException e){e.printStackTrace();}}
+        } catch(IOException e){e.printStackTrace();}}*/}
 
     @FXML
     void removeItem(ActionEvent event) {
@@ -326,9 +393,11 @@ public class Controller implements Initializable {
                 }
             }
             Main.itemMap.remove(item.getName());
+            Main.itemMap.get(selectedItem.getParent().getValue()).removeChild(selectedItem.getValue());
             selectedItem.getParent().getChildren().remove(selectedItem);
             selectedItem.setExpanded(true);
             saveMap();
+            drawFarm();
         }
     }
 

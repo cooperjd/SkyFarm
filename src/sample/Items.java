@@ -17,8 +17,6 @@ public abstract class Items implements Serializable{
 
     private HashMap<String, Items> children = new HashMap<>();
 
-
-
     public Items(String name,
                  Double price,
                  Integer xCoord,
@@ -37,7 +35,7 @@ public abstract class Items implements Serializable{
         blue = color.getBlue();
     }
 
-    abstract boolean isItemContainer();
+    protected abstract boolean isItemContainer();
 
     public HashMap<String,Items> getChildren(){
         if(!isItemContainer()) return null;
@@ -108,8 +106,19 @@ public abstract class Items implements Serializable{
         return "[red=" + red + ", green=" + green + ", blue=" + blue + "]";
     }
 
-    public void setChildren(HashMap<String, Items> children) {
-        this.children = children;
+    public void setChildren(String[] names) {
+        if(isItemContainer()){
+            for(String name : names){
+                children.put(name, Main.itemMap.get(name));
+            }
+        }
+    }
+
+    public void removeChild(String name){
+        children.remove(name);
+        if(children.size() == 0){
+            children.put("null", null);
+        }
     }
 }
 

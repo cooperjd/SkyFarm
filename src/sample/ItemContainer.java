@@ -3,6 +3,7 @@ package sample;
 import java.awt.*;
 
 public class ItemContainer extends Items {
+
     public ItemContainer(String name,
                          Double price,
                          Integer xCoord,
@@ -14,7 +15,7 @@ public class ItemContainer extends Items {
     }
 
     @Override
-    boolean isItemContainer() {
+    protected boolean isItemContainer() {
         return true;
     }
 }
